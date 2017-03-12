@@ -1,3 +1,5 @@
+assignment3/cs231n/datasets/coco_captioning
+assignment3/cs231n/datasets/tiny-imagenet-100-A
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
