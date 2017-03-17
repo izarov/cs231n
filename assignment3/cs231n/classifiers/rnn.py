@@ -139,12 +139,14 @@ class CaptioningRNN(object):
     h0, proj_cache = temporal_affine_forward(features.reshape(N, 1, D), W_proj, b_proj)
     h0 = h0.reshape(N, -1)
     x, wembed_cache = word_embedding_forward(captions_in, W_embed)
-    hs, rnn_cache = rnn_forward(x, h0, Wx, Wh, b) # (N, T, H)
+    forward_fn = rnn_forward if self.cell_type == 'rnn' else lstm_forward
+    hs, cell_cache = forward_fn(x, h0, Wx, Wh, b) # (N, T, H)
     ys, ys_cache = temporal_affine_forward(hs, W_vocab, b_vocab)
     loss, dloss = temporal_softmax_loss(ys, captions_out, mask)
 
     dhs, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dloss, ys_cache)
-    dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(dhs, rnn_cache)
+    backward_fn = rnn_backward if self.cell_type == 'rnn' else lstm_backward
+    dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = backward_fn(dhs, cell_cache)
     grads['W_embed'] = word_embedding_backward(dx, wembed_cache)
     dfeatures, grads['W_proj'], grads['b_proj'] = temporal_affine_backward(dh0.reshape(N, 1, -1), proj_cache)
     ############################################################################
@@ -217,8 +219,13 @@ class CaptioningRNN(object):
 
     prev_words = embed_words(self._start * np.ones((N, ), dtype=np.int32))
     prev_h = h0
+    prev_c = np.zeros_like(prev_h)
     for t in range(max_length):
-      prev_h, _ = rnn_step_forward(prev_words, prev_h, Wx, Wh, b)
+      if self.cell_type == 'rnn':
+        prev_h, _ = rnn_step_forward(prev_words, prev_h, Wx, Wh, b)
+      elif self.cell_type == 'lstm':
+        prev_h, prev_c, _ = lstm_step_forward(prev_words, prev_h, prev_c, Wx, Wh, b)
+      
       ys, _ = temporal_affine_forward(prev_h.reshape(N, 1, -1), W_vocab, b_vocab)
       ys = ys.reshape(N, -1)
       words = np.argmax(ys, axis=1)
